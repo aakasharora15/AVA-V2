@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="report.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1275,177 +1276,18 @@ function copyRep(){
   });
 }
 
-// ── PDF ──
+// ── PDF — delegates entirely to report.js ──
 async function dlPDF(){
   const btn=document.getElementById('dlBtn');
-  btn.disabled=true;btn.innerHTML='<span class="mi" style="font-size:13px">hourglass_empty</span> Generating...';
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210,H=297,M=20,CW=W-M*2;
-  const rgb=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
-  const fill=h=>doc.setFillColor(...rgb(h));
-  const tc=h=>doc.setTextColor(...rgb(h));
-  const bg=()=>{fill('#0A0A0F');doc.rect(0,0,W,H,'F')};
-  const wT=(text,x,y,mW,lh)=>{
-    if(!text)return y;
-    doc.splitTextToSize(String(text),mW).forEach(l=>{
-      if(y>H-20){doc.addPage();bg();y=26;}
-      doc.text(l,x,y);y+=lh;
-    });
-    return y;
-  };
-
-  // ── COVER ──
-  bg();
-  // Violet glow
-  fill('#1A1528');doc.ellipse(W/2,60,80,40,'F');
-  // Logo area
-  tc('#7C6AF5');doc.setFontSize(48);doc.setFont('helvetica','bold');doc.text('AVA',M,50);
-  tc('#5A5A6E');doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text('ADVERSARIAL VENTURE ANALYSIS',M,60);
-  // Accent line
-  fill('#7C6AF5');doc.rect(M,68,40,1,'F');
-  // Venture title
-  tc('#FFFFFF');doc.setFontSize(22);doc.setFont('helvetica','bold');
-  const tl=doc.splitTextToSize(fMeta.title||'Venture Audit',CW);
-  let ty=82;tl.forEach(l=>{doc.text(l,M,ty);ty+=10;});
-  // Meta
-  tc('#9090A8');doc.setFontSize(10);doc.setFont('helvetica','normal');
-  const meta=[fMeta.industry,(fMeta.city?fMeta.city+', ':'')+fMeta.country,fMeta.delivery,fMeta.budget].filter(Boolean).join('  ·  ');
-  doc.text(meta,M,ty+4);
-  tc('#5A5A6E');doc.text(`Generated ${new Date().toLocaleString('en-GB')}`,M,ty+12);
-  doc.text(`Audit ID: ${aData.audit_id||'—'}`,M,ty+20);
-
-  // Score block
-  fill('#13131A');doc.roundedRect(M,ty+30,CW,44,5,5,'F');
-  fill('#7C6AF5');doc.rect(M,ty+30,3,44,'F');
-  tc('#9090A8');doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text('RESILIENCE SCORE',M+10,ty+42);
-  const sc=aData.score>=70?'#E5534B':aData.score>=45?'#E09B3D':'#3FB68A';
-  tc(sc);doc.setFontSize(32);doc.text(String(aData.score),M+10,ty+64);
-  tc('#5A5A6E');doc.setFontSize(11);doc.setFont('helvetica','normal');doc.text('/ 100',M+34,ty+64);
-  const sevLabel=aData.score>=70?'HIGH RISK':aData.score>=45?'MODERATE RISK':'LOW RISK';
-  tc(sc);doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text(sevLabel,M+60,ty+64);
-
-  // Pivot directive on cover
-  if(aData.agent3?.pivot_directive){
-    fill('#1C1C2E');doc.roundedRect(M,ty+82,CW,20,4,4,'F');
-    tc('#7C6AF5');doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('FINAL DIRECTIVE',M+8,ty+90);
-    tc('#FFFFFF');doc.setFontSize(9);doc.setFont('helvetica','normal');
-    const pLines=doc.splitTextToSize(aData.agent3.pivot_directive,CW-16);
-    if(pLines.length>0)doc.text(pLines[0],M+8,ty+98);
+  btn.disabled=true;
+  btn.innerHTML='<span class="mi" style="font-size:13px">hourglass_empty</span> Generating...';
+  try {
+    generateAVAReport(aData, fMeta);
+  } catch(e) {
+    console.error('AVA PDF generation failed:', e);
   }
-
-  tc('#3A3A4A');doc.setFontSize(7);doc.text('CONFIDENTIAL AVA INTELLIGENCE',M,H-12);doc.text('adversarial venture analysis report',W-M,H-12,{align:'right'});
-
-  // ── CONTENT PAGES ──
-  const agentSecs=[
-    {
-      num:'01',name:'THE SABOTEUR',sub:'Internal Forensics · TIM WOODS · Financial Exposure',
-      col:'#E5534B',colbg:'#2A1515',
-      items:[
-        {title:'Executive Risk Summary',finding:aData.agent1?.executive_risk_summary_finding,body:aData.agent1?.executive_risk_summary,sev:aData.severity?.executive_risk_summary},
-        {title:'Operational Risks',finding:aData.agent1?.operational_risks_finding,body:aData.agent1?.operational_risks,sev:aData.severity?.operational_risks},
-        {title:'Financial Risks',finding:aData.agent1?.financial_risks_finding,body:aData.agent1?.financial_risks,sev:aData.severity?.financial_risks},
-        {title:'Failure Probability Indicators',finding:aData.agent1?.failure_probability_indicators_finding,body:aData.agent1?.failure_probability_indicators,sev:aData.severity?.failure_probability_indicators},
-      ]
-    },
-    {
-      num:'02',name:'THE PREDATOR',sub:'External Offensive · Market Analysis · Competitor Simulation',
-      col:'#E09B3D',colbg:'#2A2015',
-      items:[
-        {title:'Market Saturation Analysis',finding:aData.agent2?.market_saturation_analysis_finding,body:aData.agent2?.market_saturation_analysis,sev:aData.severity?.market_saturation_analysis},
-        {title:'Regional & Geographic Challenges',finding:aData.agent2?.regional_geographic_challenges_finding,body:aData.agent2?.regional_geographic_challenges,sev:aData.severity?.regional_geographic_challenges},
-        {title:'Competitor Attack Analysis',finding:aData.agent2?.competitor_attack_analysis_finding,body:aData.agent2?.competitor_attack_analysis,sev:aData.severity?.competitor_attack_analysis},
-        {title:'Customer Psychology Risks',finding:aData.agent2?.customer_psychology_risks_finding,body:aData.agent2?.customer_psychology_risks,sev:aData.severity?.customer_psychology_risks},
-      ]
-    },
-    {
-      num:'03',name:'THE ORCHESTRATOR',sub:'Strategic Verdict · Investor Perspective · Pivot Roadmap',
-      col:'#7C6AF5',colbg:'#1A1528',
-      items:[
-        {title:'Investor Perspective',finding:aData.agent3?.investor_perspective_finding,body:aData.agent3?.investor_perspective,sev:aData.severity?.investor_perspective},
-        {title:'Strategic Recommendations',finding:aData.agent3?.strategic_recommendations_finding,body:aData.agent3?.strategic_recommendations,sev:aData.severity?.strategic_recommendations},
-      ]
-    },
-  ];
-
-  for(const agent of agentSecs){
-    // Agent divider page
-    doc.addPage();bg();
-    fill(agent.colbg);doc.rect(0,0,W,H,'F');
-    fill(agent.col);doc.rect(0,0,4,H,'F');
-    tc(agent.col);doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text('AGENT '+agent.num,M,H/2-20);
-    tc('#FFFFFF');doc.setFontSize(28);doc.text(agent.name,M,H/2);
-    tc('#9090A8');doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text(agent.sub,M,H/2+14);
-
-    // Content page for this agent
-    doc.addPage();bg();
-    // Header band
-    fill('#13131A');doc.rect(0,0,W,30,'F');
-    fill(agent.col);doc.rect(0,0,3,30,'F');
-    tc(agent.col);doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text('AGENT '+agent.num+' '+agent.name,M,13);
-    tc('#5A5A6E');doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text(agent.sub,M,21);
-    tc('#3A3A4A');doc.text(fMeta.title||'',W-M,13,{align:'right'});
-
-    let y=40;
-    for(const item of agent.items){
-      if(y>H-45){
-        doc.addPage();bg();
-        fill('#13131A');doc.rect(0,0,W,22,'F');
-        fill(agent.col);doc.rect(0,0,3,22,'F');
-        tc(agent.col);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('AGENT '+agent.num+' continued',M,13);
-        y=32;
-      }
-
-      // Section title bar
-      fill('#1C1C26');doc.roundedRect(M,y-5,CW,13,2,2,'F');
-      fill(agent.col);doc.rect(M,y-5,3,13,'F');
-      tc('#FFFFFF');doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text(item.title,M+7,y+4);
-      // Severity badge
-      if(item.sev){
-        const sevCol=item.sev==='HIGH'?'#E5534B':item.sev==='MEDIUM'?'#E09B3D':'#3FB68A';
-        tc(sevCol);doc.setFontSize(8);doc.text(item.sev,W-M-2,y+4,{align:'right'});
-      }
-      y+=16;
-
-      // Key finding pull quote
-      if(item.finding){
-        fill('#1A1A2E');doc.roundedRect(M,y-2,CW,12,2,2,'F');
-        fill('#7C6AF5');doc.rect(M,y-2,2,12,'F');
-        tc('#C8C0F8');doc.setFontSize(8.5);doc.setFont('helvetica','italic');
-        const fLines=doc.splitTextToSize('"'+item.finding+'"',CW-10);
-        doc.text(fLines[0],M+6,y+6);
-        y+=16;
-      }
-
-      // Body text
-      tc('#9090A8');doc.setFontSize(9);doc.setFont('helvetica','normal');
-      y=wT(item.body||'',M,y,CW,5.4);
-      y+=10;
-    }
-
-    // Footer
-    fill('#0D0D12');doc.rect(0,H-10,W,10,'F');
-    tc('#3A3A4A');doc.setFontSize(7);doc.text('AVA Adversarial Venture Analysis  ·  Confidential  ·  '+aData.audit_id,M,H-4);
-    doc.text(`Score: ${aData.score}/100`,W-M,H-4,{align:'right'});
-  }
-
-  // Final directive page
-  if(aData.agent3?.pivot_directive){
-    doc.addPage();bg();
-    fill('#1C1C2E');doc.rect(0,0,W,H,'F');
-    fill('#7C6AF5');doc.rect(0,0,W,4,'F');
-    tc('#5A5A6E');doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text('FINAL DIRECTIVE',W/2,H/2-30,{align:'center'});
-    fill('#7C6AF5');doc.rect(W/2-20,H/2-22,40,1,'F');
-    tc('#FFFFFF');doc.setFontSize(16);doc.setFont('helvetica','bold');
-    const dirLines=doc.splitTextToSize(aData.agent3.pivot_directive,CW);
-    let dy=H/2-10;
-    dirLines.forEach(l=>{doc.text(l,W/2,dy,{align:'center'});dy+=10;});
-    tc('#5A5A6E');doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('AVA INTELLIGENCE  ·  '+aData.audit_id,W/2,H-20,{align:'center'});
-  }
-
-  const safe=(fMeta.title||'Venture').replace(/[^a-zA-Z0-9]/g,'_');
-  doc.save(`AVA_Audit_${safe}_${new Date().toISOString().slice(0,10)}.pdf`);
-  btn.disabled=false;btn.innerHTML='<span class="mi" style="font-size:13px">download</span> Download PDF';
+  btn.disabled=false;
+  btn.innerHTML='<span class="mi" style="font-size:13px">download</span> Download PDF';
 }
 </script>
 </body>
